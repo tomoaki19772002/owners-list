@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>馬主データ一覧</title>
+<style>
+  body{font-family:sans-serif;margin:0;background:#f3f5f7;color:#222}
+  header{background:#1b4d3e;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{margin:0;font-size:20px;flex:1}
+  #stamp{font-size:12px;opacity:.85}
+  button{background:#fff;color:#1b4d3e;border:0;border-radius:6px;padding:7px 14px;font-size:14px;cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;padding:12px 16px 24px}
+  .card{background:#fff;border-radius:8px;box-shadow:0 1px 3px #0002;padding:14px}
+  .card h2{margin:0 0 8px;font-size:18px}
+  .card h2 a{color:#1b4d3e;text-decoration:none}
+  .stats{display:flex;gap:16px;font-size:12px;color:#555;margin-bottom:10px;flex-wrap:wrap}
+  .stats b{display:block;font-size:16px;color:#222}
+  .day{background:#e8f0ec;font-weight:bold;font-size:13px;padding:4px 8px;border-radius:4px;margin:10px 0 4px}
+  .run{display:grid;grid-template-columns:52px 1fr auto;gap:2px 8px;padding:6px 4px;border-bottom:1px solid #eee;font-size:13px;align-items:center}
+  .run .rn{font-weight:bold;text-align:center}
+  .run .rn small{display:block;font-weight:normal;color:#666;font-size:11px}
+  .run .horse{font-weight:bold;font-size:15px}
+  .run .rname{color:#555;font-size:12px;grid-column:2}
+  .run .rname a{color:inherit}
+  .right{text-align:right;grid-row:1 / span 2;grid-column:3;line-height:1.5}
+  .odds{font-size:15px;font-weight:bold}
+  .red{color:#d62828;font-weight:bold}
+  .blue{color:#1d5fd1;font-weight:bold}
+  .res{display:inline-block;min-width:2.5em;text-align:center;border-radius:4px;padding:0 6px;font-weight:bold}
+  .res.red{background:#fde3e3}.res.blue{background:#e1ecfd}
+  .tag{font-size:11px;font-weight:normal;color:#fff;background:#888;border-radius:3px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+  .tag.jra{background:#c0392b}
+  .none{color:#888;font-size:13px;padding:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>馬主データ一覧</h1>
+  <span id="stamp">読み込み中…</span>
+  <button onclick="load()">最新に更新</button>
+</header>
+<div class="grid" id="grid"></div>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const popCls = p => p === 1 ? "red" : p === 2 ? "blue" : "";
+const resCls = r => r === "1着" ? "red" : r === "2着" ? "blue" : "";
+
+function run(r) {
+  const odds = r.odds == null ? "-" : r.odds + "倍";
+  const oc = r.odds != null && r.odds < 10 ? "red" : "";
+  return `<div class="run">
+    <div class="rn">${esc(r.race)}<small>${esc(r.time)}</small></div>
+    <div class="horse">${esc(r.horse)}</div>
+    <div class="right">
+      <div class="odds ${oc}">${odds}</div>
+      <div><span class="${popCls(r.pop)}">${r.pop ? r.pop + "人気" : "--人気"}</span></div>
+      ${r.result && r.result !== "--" ? `<div><span class="res ${resCls(r.result)}">${esc(r.result)}</span></div>` : ""}
+    </div>
+    <div class="rname"><a href="${esc(r.raceUrl)}" target="_blank" rel="noopener">${esc(r.raceName)}</a></div>
+  </div>`;
+}
+
+function card(o) {
+  const body = o.error ? `<div class="none">取得エラー: ${esc(o.error)}</div>`
+    : o.groups.length ? o.groups.map(g => `<div class="day">${esc(g.title)}</div>${g.rows.map(run).join("")}`).join("")
+    : '<div class="none">出走情報はまだありません</div>';
+  return `<div class="card">
+    <h2><a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a><span class="tag ${o.kind === "JRA" ? "jra" : ""}">${esc(o.kind)}</span></h2>
+    <div class="stats"><span>本年勝利<b>${esc(o.wins)}</b></span><span>本年獲得賞金<b>${esc(o.prize)}</b></span><span>通算<b>${esc(o.total)}</b></span></div>
+    ${body}</div>`;
+}
+
+async function load() {
+  document.getElementById("stamp").textContent = "更新中…";
+  try {
+    let d;
+    try { d = await (await fetch("/api/owners")).json(); } catch { d = null; }
+    if (!d || !d.owners) d = await (await fetch("data.json?t=" + Date.now())).json();
+    document.getElementById("grid").innerHTML = d.owners.map(card).join("");
+    document.getElementById("stamp").textContent = "取得 " + new Date(d.fetchedAt).toLocaleTimeString("ja-JP") + "（" + (d.owners[0].asOf || "") + "）";
+  } catch (e) {
+    document.getElementById("stamp").textContent = "取得失敗";
+  }
+}
+load();
+</script>
+</body>
+</html>
